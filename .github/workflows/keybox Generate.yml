@@ -1,6 +1,6 @@
 name: Generate Encrypted Keybox XML
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger - creates "Run workflow" button
   push:
     branches: [ main ]
 
@@ -19,23 +19,20 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y openssl ssh libssl-dev
+        sudo apt-get install -y openssl libssl-dev
 
     - name: Install Python dependencies
       run: pip install cryptography lxml
 
-    - name: Clone keybox generator & run
+    - name: Clone & generate keybox
       run: |
         git clone https://github.com/LRFP-Team/keyboxGenerator.git
         cd keyboxGenerator
-        
-        # Try both script versions with error handling
-        if python3 keyboxGenerator.py; then
-          echo "✅ keyboxGenerator.py succeeded"
-        elif python3 keyboxGenerator_v2.0.py; then
-          echo "✅ keyboxGenerator_v2.0.py succeeded"
+        # Try scripts with fallback
+        if python3 keyboxGenerator.py 2>/dev/null || python3 keyboxGenerator_v2.0.py 2>/dev/null; then
+          echo "✅ Keybox generated successfully"
         else
-          echo "❌ Both scripts failed, creating template"
+          echo "⚠️ Using template keybox.xml"
           cat > keybox.xml << 'EOF'
 <?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <KeyBox version="2.0">
@@ -44,13 +41,6 @@ jobs:
 </KeyBox>
 EOF
         fi
-        
-        # Verify output exists
-        if [ ! -f "keybox.xml" ]; then
-          echo "❌ No keybox.xml generated, exiting"
-          exit 1
-        fi
-        echo "✅ keybox.xml created: $(wc -l < keybox.xml) lines"
         ls -la keybox.xml
 
     - name: Create encrypted ZIP
@@ -58,14 +48,13 @@ EOF
         ZIP_PASSWORD: ${{ secrets.KEYBOX_ZIP_PASSWORD }}
       run: |
         if [ -z "$ZIP_PASSWORD" ]; then
-          echo "❌ KEYBOX_ZIP_PASSWORD secret missing"
+          echo "❌ Missing KEYBOX_ZIP_PASSWORD secret"
           exit 1
         fi
         cd keyboxGenerator
         zip -P "$ZIP_PASSWORD" ../keybox-encrypted.zip keybox.xml
         cd ..
-        echo "✅ Encrypted ZIP created: $(du -h keybox-encrypted.zip)"
-        echo "SHA256: $(sha256sum keybox-encrypted.zip | cut -d' ' -f1)"
+        echo "✅ SHA256: $(sha256sum keybox-encrypted.zip | cut -d' ' -f1)"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -74,11 +63,11 @@ EOF
         path: keybox-encrypted.zip
         retention-days: 30
 
-    - name: Create release
+    - name: Create release (manual trigger only)
       if: github.event_name == 'workflow_dispatch'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ github.run_number }}
-        name: Keybox v${{ github.run_number }}
+        name: "Keybox v${{ github.run_number }}"
         files: keybox-encrypted.zip
         generate_release_notes: true
