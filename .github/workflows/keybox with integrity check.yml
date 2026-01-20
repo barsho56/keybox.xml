@@ -1,4 +1,4 @@
-name: Generate Encrypted Keybox XML improved
+name: Generate Encrypted Keybox XML Improved
 on:
   workflow_dispatch:
   push:
@@ -7,7 +7,7 @@ on:
 jobs:
   generate-keybox:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
 
@@ -27,26 +27,23 @@ jobs:
         git clone https://github.com/LRFP-Team/keyboxGenerator.git
         cd keyboxGenerator
         python3 keyboxGenerator.py || true
-        ls -la keybox.xml
 
     - name: Validate Keybox
       run: |
         cd keyboxGenerator
-        # Simple structure + size check (script generates valid keyboxes)
         if [ -f keybox.xml ] && [ $(wc -c < keybox.xml) -gt 2000 ]; then
           echo "✅ Keybox generated successfully"
           echo "SHA256: $(sha256sum keybox.xml | cut -d' ' -f1)"
-          echo "Size: $(du -h keybox.xml)"
         else
           echo "❌ Keybox generation failed"
           exit 1
         fi
-        # Extract first cert for basic validation
+
         grep -A 50 "BEGIN CERTIFICATE" keybox.xml | head -n 50 > cert.pem
         if openssl x509 -in cert.pem -text -noout 2>/dev/null; then
-          echo "✅ Certificate valid"
+          echo "✅ Certificate appears valid"
         else
-          echo "⚠️  Certificate check skipped"
+          echo "⚠️ Certificate check skipped"
         fi
 
     - name: Encrypt ZIP
@@ -56,14 +53,17 @@ jobs:
         cd keyboxGenerator
         zip -P "$ZIP_PASSWORD" ../keybox-encrypted.zip keybox.xml
         cd ..
-        echo "✅ ZIP SHA256: $(sha256sum keybox-encrypted.zip | cut -d' ' -f1)"
-        echo "✅ ZIP Size: $(du -h keybox-encrypted.zip)"
+        echo "ZIP SHA256: $(sha256sum keybox-encrypted.zip | cut -d' ' -f1)"
+        echo "ZIP Size: $(du -h keybox-encrypted.zip)"
 
-    - name: Upload artifacts
+    - name: Cleanup plaintext keybox
+      run: |
+        rm -f keyboxGenerator/keybox.xml
+        rm -f keyboxGenerator/cert.pem
+
+    - name: Upload artifacts (encrypted only)
       uses: actions/upload-artifact@v4
       with:
         name: keybox-encrypted
-        path: |
-          keybox-encrypted.zip
-          keyboxGenerator/keybox.xml
+        path: keybox-encrypted.zip
         retention-days: 30
