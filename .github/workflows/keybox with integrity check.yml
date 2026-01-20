@@ -1,4 +1,4 @@
-name: Generate enc keybox + check integrity
+name: Gen enc keybox + check integrity
 on:
   workflow_dispatch:  # Manual trigger only
   push:
