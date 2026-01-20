@@ -1,4 +1,4 @@
-name: Generate Encrypted Keybox XML
+name: keybox.xml generation & validity check
 on:
   workflow_dispatch:
   push:
